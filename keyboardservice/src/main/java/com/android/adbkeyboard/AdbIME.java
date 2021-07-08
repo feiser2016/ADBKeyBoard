@@ -9,14 +9,17 @@ import android.util.Base64;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
+import android.view.inputmethod.ExtractedTextRequest;
 import android.view.inputmethod.InputConnection;
 
 public class AdbIME extends InputMethodService {
     private String IME_MESSAGE = "ADB_INPUT_TEXT";
     private String IME_CHARS = "ADB_INPUT_CHARS";
     private String IME_KEYCODE = "ADB_INPUT_CODE";
+    private String IME_META_KEYCODE = "ADB_INPUT_MCODE";
     private String IME_EDITORCODE = "ADB_EDITOR_CODE";
     private String IME_MESSAGE_B64 = "ADB_INPUT_B64";
+    private String IME_CLEAR_TEXT = "ADB_CLEAR_TEXT";
     private BroadcastReceiver mReceiver = null;
 
     @Override 
@@ -27,8 +30,10 @@ public class AdbIME extends InputMethodService {
         	IntentFilter filter = new IntentFilter(IME_MESSAGE);
         	filter.addAction(IME_CHARS);
         	filter.addAction(IME_KEYCODE);
+        	filter.addAction(IME_META_KEYCODE);
         	filter.addAction(IME_EDITORCODE);
         	filter.addAction(IME_MESSAGE_B64);
+        	filter.addAction(IME_CLEAR_TEXT);
         	mReceiver = new AdbReceiver();
         	registerReceiver(mReceiver, filter);
         }
@@ -91,12 +96,37 @@ public class AdbIME extends InputMethodService {
 				}
 			}
 			
+			if (intent.getAction().equals(IME_META_KEYCODE)) {
+				int[] mcodes = intent.getIntArrayExtra("mcode");
+				if (mcodes != null) {
+					int i;
+					InputConnection ic = getCurrentInputConnection();
+					for (i = 0; i < mcodes.length - 1; i = i + 2) {
+						if (ic != null) {
+							KeyEvent ke = new KeyEvent(-1, -1, KeyEvent.ACTION_DOWN, mcodes[i+1], -1, mcodes[i]);
+							ic.sendKeyEvent(ke);
+						}
+					}
+				}
+			}
+
 			if (intent.getAction().equals(IME_EDITORCODE)) {				
 				int code = intent.getIntExtra("code", -1);				
 				if (code != -1) {
 					InputConnection ic = getCurrentInputConnection();
 					if (ic != null)
 						ic.performEditorAction(code);
+				}
+			}
+
+			if (intent.getAction().equals(IME_CLEAR_TEXT)) {
+				InputConnection ic = getCurrentInputConnection();
+				if (ic != null) {
+					//REF: stackoverflow/33082004 author: Maxime Epain
+					CharSequence curPos = ic.getExtractedText(new ExtractedTextRequest(), 0).text;
+					CharSequence beforePos = ic.getTextBeforeCursor(curPos.length(), 0);
+					CharSequence afterPos = ic.getTextAfterCursor(curPos.length(), 0);
+					ic.deleteSurroundingText(beforePos.length(), afterPos.length());
 				}
 			}
 		}
